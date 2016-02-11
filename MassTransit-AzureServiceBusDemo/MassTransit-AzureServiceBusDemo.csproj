@@ -70,6 +70,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Consumers\MyMessageConsumer.cs" />
+    <Compile Include="Messages\MySimpleMessage.cs" />
     <Compile Include="Messages\MyMessage.cs" />
     <Compile Include="Messages\MyPingMessage.cs" />
     <Compile Include="Messages\MyPongMessage.cs" />

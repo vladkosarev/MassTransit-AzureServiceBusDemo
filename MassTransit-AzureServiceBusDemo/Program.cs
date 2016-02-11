@@ -1,5 +1,6 @@
 ﻿using MassTransit;
 using MassTransit.AzureServiceBusTransport;
+using MassTransit_AzureServiceBusDemo.Consumers;
 using MassTransit_AzureServiceBusDemo.Messages;
 using Microsoft.ServiceBus;
 using System;
@@ -11,14 +12,17 @@ namespace MassTransit_AzureServiceBusDemo
     {
         static void Main(string[] args)
         {
-            var bus = Bus.Factory.CreateUsingAzureServiceBus(sbc =>
-            {
-                var clientUri = ServiceBusEnvironment.CreateServiceUri(
+            var clientUri = ServiceBusEnvironment.CreateServiceUri(
                     "sb"
                     , ConfigurationManager.AppSettings["ServiceBusNamespace"]
                     // this will get auto created for you
                     , ConfigurationManager.AppSettings["ServicePath"]);
 
+            // this will get auto created for you
+            var queueName = "MassTransitQueue";
+
+            var bus = Bus.Factory.CreateUsingAzureServiceBus(sbc =>
+            {
                 var host = sbc.Host(clientUri, h =>
                 {
                     h.SharedAccessSignature(s =>
@@ -30,13 +34,12 @@ namespace MassTransit_AzureServiceBusDemo
                     });
                 });
 
-                // this will get auto created for you
-                var queueName = "MassTransitQueue";
-
-                // define handlers
+                // define handlers/consumers
                 sbc.ReceiveEndpoint(host, queueName, endpoint =>
                 {
-                    endpoint.Handler<MyMessage>(async context =>
+                    endpoint.Consumer<MyMessageConsumer>();
+
+                    endpoint.Handler<MySimpleMessage>(async context =>
                     {
                         await Console.Out.WriteLineAsync($"Received: {context.Message.Value}");
                     });
@@ -53,16 +56,26 @@ namespace MassTransit_AzureServiceBusDemo
 
             using (bus.Start())
             {
-                // Publish a message
-                bus.Publish(new MyMessage { Value = "Hello, World." });
+                Console.WriteLine("Starting...");
 
-                // Request/Response
+                // Publish a message (as in Pub/Sub)
+                bus.Publish(new MySimpleMessage { Value = "Hello, World." });
+
+                // Send Messages (regular queue)
+                for (int i = 0; i < 10; i++)
+                {
+                    var sendEndpoint = bus.GetSendEndpoint(new Uri(clientUri, queueName)).Result;
+                    sendEndpoint.Send(new MyMessage { Value = $"For Consumer {i}" });
+                }
+
+                // Pub/Sub Request/Response
                 bus.PublishRequest(new MyPingMessage() { Value = "DATA" }, x =>
                 {
                     x.Handle<MyPongMessage>(async context => await Console.Out.WriteLineAsync(context.Message.Value));
                     x.Timeout = TimeSpan.FromSeconds(5);
                 });
 
+                Console.WriteLine("Finished...");
                 Console.ReadLine();
             }
         }
